@@ -26,3 +26,25 @@ jobs:
           target_sync_branch: master
           target_repo_token: ${{ secrets.GITHUB_TOKEN }}
           test_mode: false
+
+      - name: Calculate new MD5
+        id: get_md5
+        run: |
+          NEW_MD5=$(md5sum jar/spider.jar | awk '{print $1}')
+          echo "md5=$NEW_MD5" >> $GITHUB_OUTPUT
+
+      - name: Update config.json with new MD5
+        run: |
+          # 把 spider 字段里 ;md5; 后面的32位字符替换成新的 MD5
+          sed -i -E "s/(;md5;)[a-f0-9]{32}/\1${{ steps.get_md5.outputs.md5 }}/" jsm.json
+          # 如果你不放心，可以加一行 cat config.json 在日志里看看改没改对
+          grep -o 'spider.*md5;[a-f0-9]*' jsm.json || true
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add jsm.json
+          # 如果文件没变化（比如 MD5 本来就一样），就不提交，避免报错
+          git diff --quiet && git diff --cached --quiet || git commit -m "Auto-update spider MD5"
+          git push
